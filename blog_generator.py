@@ -6,9 +6,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
-# from langchain_experimental.text_splitter import CharacterTextSplitter
 from langchain_openai.embeddings import OpenAIEmbeddings
-# from langchain.chains import RunnableSequence
 from utils import log_error
 import os
 import logging
@@ -21,22 +19,6 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 class Document:
     def __init__(self, page_content):
         self.page_content = page_content
-
-def summarize_chunk_with_gpt3(chunk):
-    """
-    Summarize a chunk using GPT-3.5.
-    """
-    model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
-    output_parser = StrOutputParser()
-    content = chunk.page_content
-    prompt =  ChatPromptTemplate.from_template("Summarize the given section of the blog while preserving the key narrative and information from the blog. Use simple one tier flat bullet list:\n\n{content}")
-    chain = prompt | model | output_parser
-    try:
-        summary = chain.invoke(content)
-        logging.info(f"GENERATED CHUNK SUMMARY: {summary} \n\n")
-        return summary
-    except Exception as e:
-        logging.info(f"ERROR GENERATING INITIAL CHUNK SUMMARY: {e}")
 
 
 def clean_text(text):
@@ -64,7 +46,6 @@ def adjust_chunk_sizes(docs, desired_chunk_size=1500, overlap=200):
 
     return adjusted_docs
 
-
 def split_text_into_chunks(text):
     """
     Split the cleaned text into manageable chunks using semantic chunking.
@@ -72,7 +53,6 @@ def split_text_into_chunks(text):
     text_splitter = SemanticChunker(OpenAIEmbeddings(), breakpoint_threshold_type="interquartile")
     docs = text_splitter.create_documents([text])
     return docs
-
 
 def get_embeddings(text_chunks):
     """
@@ -110,15 +90,14 @@ def cluster_text_chunks(embeddings):
     sorted_array = np.sort(I, axis=0).flatten()
     return sorted_array
 
-
 def summarize_section(section):
     """
     Summarize the given section of the blog while preserving the key narrative and information from the blog. Use simple one tier flat bullet list. 
     """
     logging.info("Entered Summary Section")
-    model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
+    model = ChatOpenAI(temperature=0, model="gpt-4o")
     output_parser = StrOutputParser()
-    prompt =  ChatPromptTemplate.from_template("Summarize the given section of the blog while preserving the key narrative and information from the blog. Use simple paragraph style and respond with only a concise and information heavy summar. Respond directly with the summary paragraphs.:\n\n{section}")
+    prompt = ChatPromptTemplate.from_template("Summarize the given section of the blog while preserving the key narrative and information from the blog. Use simple paragraph style and respond with only a concise and information heavy summar. Respond directly with the summary paragraphs.:\n\n{section}")
     chain = prompt | model | output_parser
     try:
         summary = chain.invoke(section)
@@ -139,17 +118,20 @@ def generate_blog_sections_from_chunks(docs):
     """
     Generate detailed blog sections from the selected text chunks using LangChain.
     """
-    model = ChatOpenAI(temperature=0, model="gpt-4o")
+    model = ChatOpenAI(temperature=0, model="gpt-4o", streaming=True)
     output_parser = StrOutputParser()
 
     prompt = ChatPromptTemplate.from_template("""
-    You an expert content marketer. Write the continued sections for a detailed blog that has the most useful and publishworthy information from the attached chat converstaion. Preserve the most important facts, terminologies, jargon, insights and information from the attached conversation between the user and ChatGPT. Don't mention user's name.
-    Ensure the new section fits naturally and flows seamlessly with the previous sections. Avoid repetitive information and maintain coherence.
+    You an expert content marketer. Write the continued sections for a summary blog that has the most useful and publishworthy information from the attached chat converstaion. Do not over exaggerate the conversation and strictly follow what has been discussed in the chat without adding any new information. Preserve the most important facts, terminologies, jargon, insights and information from the attached conversation between the user and ChatGPT. Don't mention user's name.
+    Do not write full excerpts from the chat as they are. Summarise them concisely into paragraphs to write continued blog sections that have the best information from the chat. Ensure the new section fits naturally and flows seamlessly with the previous sections. Avoid repetitive information and maintain coherence.
     Writing style: Casual conversational, informational, insightful, deeply profound, engaging, talking directly to the reader, short simple linear active voice
     Do not use words like - [It's like, It's about, Isn't about, Isn't just, Delve, Imagine, consequently, in addition to, In conclusion, transformative, fostering, but also, not only]
     Write cohesive paragraph style blog style content. Write human like content with variable size paragraphs and natural conversational content flow.
     Use the summary of the content written till now to get context, use last 200 words to maintain flow and then use the chat messages to write fresh section content.
-    Write on behalf of the user as if you are directly talking to the reader expressing your thoughts and inquiries.
+    Write on behalf of the user as if you are directly talking to the reader expressing your thoughts and inquiries. Remember to not write full information and only write the synthesised important parts based on the narrative. Wrie in book paragraphs.
+    IMPORTANT: If any part is already included in previous sections as per the summary, then do not include it in the response. Skip it all together. Even if it means responding with a empty space character.
+    IMPORTANT: Do not write long repetitive content and try to summarise chats by synthesising important information and writing concise summary paragraphs. Paragraphs should be long but total length should be short. 
+                                              
     CURRENT BLOG PROGRESS & CHATS: 
     ```{text}```
     BLOG SECTION:
@@ -179,10 +161,11 @@ def generate_blog_sections_from_chunks(docs):
 
         try:
             logging.info(f"\nBLOG SECTION PROMPT: \n{prompt_text}")
-            response = chain.invoke(prompt_text)
-            response_text = response.strip()
-            logging.info(f"\nGENERATED SECTION CONTENT: {response_text}")
-            blog_content += response_text + "\n\n"
+            for chunk in chain.stream(prompt_text):
+                if blog_content and not blog_content.endswith('\n'):
+                    blog_content += '\n'
+                yield chunk
+                blog_content += chunk
             logging.info(f"Generated blog section number {i + 1}.")
 
             # Update summaries
@@ -193,8 +176,6 @@ def generate_blog_sections_from_chunks(docs):
             log_error(f"Error generating blog content: {e}")
 
     logging.info("Completed generating all blog sections.")
-    return blog_content
-
 
 def generate_blog_from_text(input_text):
     """
@@ -202,7 +183,5 @@ def generate_blog_from_text(input_text):
     """
     cleaned_text = clean_text(input_text)
     text_chunks = split_text_into_chunks(cleaned_text)
-    blog_content = generate_blog_sections_from_chunks(text_chunks)
-    return blog_content
-
-
+    for chunk in generate_blog_sections_from_chunks(text_chunks):
+        yield chunk
