@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 st.set_page_config(
-    layout="wide", page_icon=":material/description:", page_title="Blog Generator"
+    layout="wide",
+    page_icon=":material/description:",
+    page_title="Blog Generator",
 )
 st.title("🦜🔗 Blog Generator App")
 
