@@ -1,7 +1,9 @@
+import asyncio
 import time
 import streamlit as st
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
+from writer_agent import get_final_article
 
 load_dotenv()
 
@@ -17,13 +19,10 @@ with st.sidebar:
     "[Get an OpenAI API key](https://platform.openai.com/account/api-keys)"
 
 
-def generate_response(input_text):
-    model = ChatGroq(model="llama3-8b-8192", max_tokens=8000)
-    response = model.invoke(input_text)
-    st.info(response.content)
+def generate_response(chat_url):
+    response = asyncio.run(get_final_article(chat_url=chat_url))
+    st.info(response)
 
-
-col1, col2 = st.columns([5, 1])
 
 with st.form("my_form"):
     chat_url = st.text_input(
@@ -36,5 +35,4 @@ with st.form("my_form"):
     #     st.info("Please add your OpenAI API key to continue.")
     if submitted:
         with st.spinner(text="Blog Generation in progress..."):
-            time.sleep(3)
             generate_response(chat_url)

@@ -2,6 +2,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
+
 class ChatGPTScraper:
     """
     A class to scrape and extract conversation data from a ChatGPT public chat URL.
@@ -114,9 +115,10 @@ class ChatGPTScraper:
             )
         return full_conversation
 
+
 if __name__ == "__main__":
     CHAT_URL = "https://chatgpt.com/share/1d25bae0-fa33-4445-8276-b009a9bc28e1"
-    
+
     scraper = ChatGPTScraper(url=CHAT_URL)
     full_conversation = scraper.get_full_conversation()
 
