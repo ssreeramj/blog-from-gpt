@@ -31,8 +31,9 @@ with st.form("my_form"):
         value="",
     )
     submitted = st.form_submit_button("Submit")
-    # if not openai_api_key:
-    #     st.info("Please add your OpenAI API key to continue.")
-    if submitted:
+    if not openai_api_key:
+        st.warning("Please add your OpenAI API key to continue.")
+    
+    elif submitted:
         with st.spinner(text="Blog Generation in progress..."):
             generate_response(chat_url)
