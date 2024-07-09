@@ -67,6 +67,4 @@ class BlogSection(BaseModel):
         subsections = "\n\n".join(
             subsection.as_str for subsection in self.subsections or []
         )
-        return (
-            f"## {self.section_title}\n\n{self.content}\n\n{subsections}".strip()
-        )
+        return f"## {self.section_title}\n\n{self.content}\n\n{subsections}".strip()

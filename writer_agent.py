@@ -1,47 +1,20 @@
 # Standard library imports
 import asyncio
-import os
-import random
-import requests
+from typing import List, TypedDict
 
-# Third-party imports
-from langchain_community.tools import DuckDuckGoSearchRun, DuckDuckGoSearchResults
-from langchain_core.agents import AgentAction, AgentFinish
-from langchain_core.messages import (
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-    ToolMessage,
-)
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod, NodeColors
-from langchain_core.tools import StructuredTool, tool
-from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langgraph.graph import END, MessageGraph, StateGraph
-from langgraph.prebuilt import ToolInvocation
-from langgraph.prebuilt.tool_executor import ToolExecutor
-from typing import Annotated, Sequence, TypedDict, Union, Literal, List
-
+import streamlit as st
+from langchain.prompts import ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import SKLearnVectorStore
+from langchain_core.output_parsers import StrOutputParser
+from langgraph.graph import END, StateGraph
 
-from pprint import pprint
-
-from formatters import Section, Subsection, Outline, BlogSection, BlogSubSection
+from formatters import BlogSection, Outline
 from scraper import ChatGPTScraper
 
-from dotenv import load_dotenv
 
-load_dotenv()
-
-LLM_MODEL = ChatOpenAI(name="gpt-4o")
-EMBEDDINGS = OpenAIEmbeddings(model="text-embedding-3-small")
+LLM_MODEL = st.session_state.get("llm_model")
+EMBEDDINGS = st.session_state.get("embeddings")
 retriever = None
 
 
@@ -106,16 +79,12 @@ async def index_references(state: ResearchState):
 async def retrieve(inputs: dict):
     docs = await retriever.ainvoke(inputs["topic"] + ": " + inputs["section"])
     formatted = "\n".join(
-        [
-            f'<Document/>\n{doc.page_content}\n</Document>'
-            for doc in docs
-        ]
+        [f"<Document/>\n{doc.page_content}\n</Document>" for doc in docs]
     )
     return {"docs": formatted, **inputs}
 
 
 async def write_sections(state: ResearchState):
-
     section_writer_prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -128,9 +97,7 @@ async def write_sections(state: ResearchState):
     )
 
     section_writer = (
-        retrieve
-        | section_writer_prompt
-        | LLM_MODEL.with_structured_output(BlogSection)
+        retrieve | section_writer_prompt | LLM_MODEL.with_structured_output(BlogSection)
     )
 
     outline = state["outline"]
@@ -158,10 +125,7 @@ async def write_article(state: ResearchState):
                 "You are an expert blog author. Write the complete blog article on {topic} using the following section drafts:\n\n"
                 "{draft}\n\nStrictly follow the blog outline guidelines.",
             ),
-            (
-                "user",
-                'Write the complete blog article using markdown format.'
-            ),
+            ("user", "Write the complete blog article using markdown format."),
         ]
     )
 
@@ -208,14 +172,13 @@ async def get_final_article(chat_url=None):
     # print(f"Title: {scraper.title}")
     # print(f"Messages: {full_conversation[:300]}")
 
-    response = await blog_writer.ainvoke({
-        "blog_title": scraper.title,
-        "full_conversation": full_conversation
-    })
+    response = await blog_writer.ainvoke(
+        {"blog_title": scraper.title, "full_conversation": full_conversation}
+    )
 
     # print(response.article)
     return response["article"]
 
+
 if __name__ == "__main__":
-    
     asyncio.run(get_final_article())
